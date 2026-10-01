@@ -1,0 +1,16 @@
+export const colors = {
+  primary: '#1F3864',
+  link: '#2F5BEA',
+  background: '#FFFFFF',
+  inputBackground: '#F5F5F5',
+  border: '#E0E0E0',
+  textPrimary: '#1A1A1A',
+  textSecondary: '#6B6B6B',
+  placeholder: '#9B9B9B',
+  income: '#1D9E75',
+  expense: '#C0392B',
+  balanceCard: '#1E3A8A',
+  incomeBg: '#EAF7F0',
+  expenseBg: '#FBEAEA',
+  inactive: '#9B9B9B',
+};

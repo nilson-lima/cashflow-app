@@ -7,8 +7,13 @@ import {
   StyleSheet,
   Alert,
 } from 'react-native';
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import type { RootStackParamList } from '../../navigation/AppNavigator';
+import { colors } from '../../theme/colors';
 
-export default function LoginScreen() {
+type Props = NativeStackScreenProps<RootStackParamList, 'Login'>;
+
+export default function LoginScreen({ navigation }: Props) {
   const [email, setEmail] = useState('');
   const [senha, setSenha] = useState('');
 
@@ -18,9 +23,13 @@ export default function LoginScreen() {
       return;
     }
 
-    // TODO: aqui vai entrar a chamada de autenticação do Firebase
-    console.log('Tentando entrar com:', { email, senha });
-    Alert.alert('Login', `Simulando login com o e-mail: ${email}`);
+    if (!/^\S+@\S+\.\S+$/.test(email.trim())) {
+      Alert.alert('E-mail inválido', 'Digite um e-mail válido.');
+      return;
+    }
+
+    // TODO: conferir usuário cadastrado (autenticação simulada)
+    navigation.replace('Dashboard');
   }
 
   return (
@@ -31,7 +40,7 @@ export default function LoginScreen() {
       <TextInput
         style={styles.input}
         placeholder="E-mail"
-        placeholderTextColor="#9B9B9B"
+        placeholderTextColor={colors.placeholder}
         value={email}
         onChangeText={setEmail}
         autoCapitalize="none"
@@ -41,7 +50,7 @@ export default function LoginScreen() {
       <TextInput
         style={styles.input}
         placeholder="Senha"
-        placeholderTextColor="#9B9B9B"
+        placeholderTextColor={colors.placeholder}
         value={senha}
         onChangeText={setSenha}
         secureTextEntry
@@ -51,7 +60,12 @@ export default function LoginScreen() {
         <Text style={styles.textoBotao}>Entrar</Text>
       </TouchableOpacity>
 
-      <Text style={styles.link}>Não tem conta? Cadastre-se</Text>
+      <View style={styles.linhaLink}>
+        <Text style={styles.textoLink}>Não tem uma conta? </Text>
+        <TouchableOpacity onPress={() => navigation.navigate('Cadastro')}>
+          <Text style={styles.link}>Cadastre-se</Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }
@@ -59,33 +73,33 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.background,
     padding: 24,
     justifyContent: 'center',
   },
   titulo: {
     fontSize: 29,
     fontWeight: 'bold',
-    color: '#1F3864',
+    color: colors.textPrimary,
     textAlign: 'center',
   },
   subtitulo: {
     fontSize: 14,
-    color: '#6B6B6B',
+    color: colors.textSecondary,
     textAlign: 'center',
     marginBottom: 32,
   },
   input: {
-    backgroundColor: '#F5F5F5',
+    backgroundColor: colors.inputBackground,
     borderWidth: 1,
-    borderColor: '#E0E0E0',
+    borderColor: colors.border,
     borderRadius: 12,
     padding: 14,
     marginBottom: 14,
     fontSize: 14,
   },
   botao: {
-    backgroundColor: '#1F3864',
+    backgroundColor: colors.primary,
     borderRadius: 12,
     padding: 14,
     alignItems: 'center',
@@ -96,10 +110,18 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '500',
   },
-  link: {
-    color: '#1F3864',
-    fontSize: 13,
-    textAlign: 'center',
+  linhaLink: {
+    flexDirection: 'row',
+    justifyContent: 'center',
     marginTop: 16,
+  },
+  textoLink: {
+    fontSize: 13,
+    color: colors.textSecondary,
+  },
+  link: {
+    fontSize: 13,
+    color: colors.link,
+    fontWeight: '600',
   },
 });
