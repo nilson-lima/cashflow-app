@@ -48,8 +48,7 @@ export default function BottomBar({ ativo }: Props) {
       <Item aba="Inicio" icone="home" label="Início" />
       <Item aba="Graficos" icone="stats-chart" label="Gráficos" />
 
-      {/* TODO: abrir Nova Transação quando a tela existir */}
-      <TouchableOpacity style={styles.item} onPress={telaEmBreve}>
+      <TouchableOpacity style={styles.item} onPress={() => navigation.navigate('NovaTransacao')}>
         <View style={styles.fab}>
           <Ionicons name="add" size={26} color="#FFFFFF" />
         </View>
