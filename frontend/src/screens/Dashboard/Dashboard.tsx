@@ -5,10 +5,24 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../navigation/AppNavigator';
 import { colors } from '../../theme/colors';
 import BottomBar from '../../components/BottomBar';
+import { useTransacoes } from '../../contexts/TransacoesContext';
+import { formatarMoeda, rotuloData } from '../../utils/formatters';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Dashboard'>;
 
 export default function DashboardScreen({ navigation }: Props) {
+  const { transacoes } = useTransacoes();
+
+  const receitas = transacoes
+    .filter((t) => t.tipo === 'receita')
+    .reduce((soma, t) => soma + t.valorCentavos, 0);
+  const despesas = transacoes
+    .filter((t) => t.tipo === 'despesa')
+    .reduce((soma, t) => soma + t.valorCentavos, 0);
+  const saldo = receitas - despesas;
+
+  const recentes = transacoes.slice(0, 5);
+
   return (
     <View style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
@@ -17,7 +31,7 @@ export default function DashboardScreen({ navigation }: Props) {
 
         <View style={styles.cardSaldo}>
           <Text style={styles.labelSaldo}>Saldo total:</Text>
-          <Text style={styles.valorSaldo}>R$ 2.450,00</Text>
+          <Text style={styles.valorSaldo}>{formatarMoeda(saldo)}</Text>
         </View>
 
         <View style={styles.linhaResumo}>
@@ -28,7 +42,9 @@ export default function DashboardScreen({ navigation }: Props) {
             ]}
           >
             <Text style={[styles.labelResumo, { color: colors.income }]}>Receitas</Text>
-            <Text style={[styles.valorResumo, { color: colors.income }]}>R$ 4.000,00</Text>
+            <Text style={[styles.valorResumo, { color: colors.income }]}>
+              {formatarMoeda(receitas)}
+            </Text>
           </View>
           <View
             style={[
@@ -37,33 +53,39 @@ export default function DashboardScreen({ navigation }: Props) {
             ]}
           >
             <Text style={[styles.labelResumo, { color: colors.expense }]}>Despesas</Text>
-            <Text style={[styles.valorResumo, { color: colors.expense }]}>R$ 1.550,00</Text>
+            <Text style={[styles.valorResumo, { color: colors.expense }]}>
+              {formatarMoeda(despesas)}
+            </Text>
           </View>
         </View>
 
         <Text style={styles.tituloSecao}>Movimentações Recentes</Text>
 
-        <View style={styles.itemTransacao}>
-          <View style={styles.iconeTransacao}>
-            <Ionicons name="cart-outline" size={18} color={colors.textSecondary} />
-          </View>
-          <View style={styles.infoTransacao}>
-            <Text style={styles.nomeTransacao}>Supermercado</Text>
-            <Text style={styles.detalheTransacao}>Hoje • Alimentação</Text>
-          </View>
-          <Text style={styles.valorNegativo}>- R$ 250,00</Text>
-        </View>
+        {recentes.length === 0 && (
+          <Text style={styles.vazio}>Nenhuma movimentação ainda. Toque em "+" para adicionar.</Text>
+        )}
 
-        <View style={styles.itemTransacao}>
-          <View style={styles.iconeTransacao}>
-            <Ionicons name="cash-outline" size={18} color={colors.textSecondary} />
+        {recentes.map((t) => (
+          <View key={t.id} style={styles.itemTransacao}>
+            <View style={styles.iconeTransacao}>
+              <Ionicons
+                name={t.tipo === 'despesa' ? 'cart-outline' : 'cash-outline'}
+                size={18}
+                color={colors.textSecondary}
+              />
+            </View>
+            <View style={styles.infoTransacao}>
+              <Text style={styles.nomeTransacao}>{t.descricao}</Text>
+              <Text style={styles.detalheTransacao}>
+                {rotuloData(t.data)} • {t.categoria}
+              </Text>
+            </View>
+            <Text style={t.tipo === 'despesa' ? styles.valorNegativo : styles.valorPositivo}>
+              {t.tipo === 'despesa' ? '- ' : '+ '}
+              {formatarMoeda(t.valorCentavos)}
+            </Text>
           </View>
-          <View style={styles.infoTransacao}>
-            <Text style={styles.nomeTransacao}>Salário</Text>
-            <Text style={styles.detalheTransacao}>Ontem • Salário</Text>
-          </View>
-          <Text style={styles.valorPositivo}>+ R$ 4.000,00</Text>
-        </View>
+        ))}
       </ScrollView>
 
       <BottomBar ativo="Inicio" />
@@ -94,6 +116,7 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     marginBottom: 10,
   },
+  vazio: { fontSize: 13, color: colors.textSecondary, paddingVertical: 12 },
   itemTransacao: {
     flexDirection: 'row',
     alignItems: 'center',
