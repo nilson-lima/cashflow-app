@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../navigation/AppNavigator';
 import type { Transacao } from '../../models/Transacao';
 import { colors } from '../../theme/colors';
 import BottomBar from '../../components/BottomBar';
+import FiltrosModal, { FILTROS_VAZIOS, FiltrosTransacao } from '../Filtros/Filtros';
 import { useTransacoes } from '../../contexts/TransacoesContext';
 import { formatarMoeda, rotuloData } from '../../utils/formatters';
 
@@ -19,10 +20,18 @@ type Grupo = { data: string; itens: Transacao[] };
 export default function ExtratoScreen({ navigation }: Props) {
   const { transacoes } = useTransacoes();
   const [aba, setAba] = useState<Aba>('Tudo');
+  const [filtros, setFiltros] = useState<FiltrosTransacao>(FILTROS_VAZIOS);
+  const [filtrosAbertos, setFiltrosAbertos] = useState(false);
+
+  const filtrosAtivos =
+    filtros.dataInicial !== '' || filtros.dataFinal !== '' || filtros.categoria !== 'Todas';
 
   const filtradas = transacoes.filter((t) => {
-    if (aba === 'Entradas') return t.tipo === 'receita';
-    if (aba === 'Saídas') return t.tipo === 'despesa';
+    if (aba === 'Entradas' && t.tipo !== 'receita') return false;
+    if (aba === 'Saídas' && t.tipo !== 'despesa') return false;
+    if (filtros.dataInicial && t.data < filtros.dataInicial) return false;
+    if (filtros.dataFinal && t.data > filtros.dataFinal) return false;
+    if (filtros.categoria !== 'Todas' && t.categoria !== filtros.categoria) return false;
     return true;
   });
 
@@ -37,14 +46,19 @@ export default function ExtratoScreen({ navigation }: Props) {
     }
   });
 
-  // TODO: abrir a tela de Filtros quando ela existir
-  function abrirFiltros() {
-    Alert.alert('Em breve', 'A tela de filtros ainda não foi implementada.');
+  function abrirDetalhes(t: Transacao) {
+    navigation.navigate('Detalhes', { id: t.id });
   }
 
-  // TODO: abrir Detalhes da Transação 
-    function abrirDetalhes(t: Transacao) {
-    navigation.navigate('Detalhes', { id: t.id });
+  function aplicarFiltros(novos: FiltrosTransacao) {
+    setFiltros(novos);
+    setFiltrosAbertos(false);
+  }
+
+  function mensagemVazia() {
+    if (transacoes.length === 0) return 'Nenhuma transação ainda. Toque em "+" para adicionar.';
+    if (filtrosAtivos) return 'Nenhuma transação encontrada com esses filtros.';
+    return 'Nenhuma transação nesta categoria.';
   }
 
   return (
@@ -52,8 +66,9 @@ export default function ExtratoScreen({ navigation }: Props) {
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.cabecalho}>
           <Text style={styles.titulo}>Extrato</Text>
-          <TouchableOpacity style={styles.botaoFiltro} onPress={abrirFiltros}>
+          <TouchableOpacity style={styles.botaoFiltro} onPress={() => setFiltrosAbertos(true)}>
             <Ionicons name="filter" size={16} color="#FFFFFF" />
+            {filtrosAtivos && <View style={styles.indicadorFiltro} />}
           </TouchableOpacity>
         </View>
 
@@ -74,13 +89,7 @@ export default function ExtratoScreen({ navigation }: Props) {
           })}
         </View>
 
-        {grupos.length === 0 && (
-          <Text style={styles.vazio}>
-            {transacoes.length === 0
-              ? 'Nenhuma transação ainda. Toque em "+" para adicionar.'
-              : 'Nenhuma transação nesta categoria.'}
-          </Text>
-        )}
+        {grupos.length === 0 && <Text style={styles.vazio}>{mensagemVazia()}</Text>}
 
         {grupos.map((g) => (
           <View key={g.data}>
@@ -113,6 +122,13 @@ export default function ExtratoScreen({ navigation }: Props) {
       </ScrollView>
 
       <BottomBar ativo="Extrato" />
+
+      <FiltrosModal
+        visible={filtrosAbertos}
+        filtrosAtuais={filtros}
+        onAplicar={aplicarFiltros}
+        onFechar={() => setFiltrosAbertos(false)}
+      />
     </View>
   );
 }
@@ -134,6 +150,17 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  indicadorFiltro: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: colors.expense,
+    borderWidth: 1.5,
+    borderColor: colors.background,
   },
   abas: { flexDirection: 'row', gap: 8, marginBottom: 20 },
   aba: {
