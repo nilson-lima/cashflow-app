@@ -5,42 +5,23 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../navigation/AppNavigator';
 import { colors } from '../../theme/colors';
 import BottomBar from '../../components/BottomBar';
+import { useTransacoes } from '../../contexts/TransacoesContext';
+import { formatarMoeda, dataHojeISO, inicioPeriodoISO } from '../../utils/formatters';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Graficos'>;
 
 type Periodo = 'Semana' | 'Mês' | 'Ano';
+const PERIODOS: Periodo[] = ['Semana', 'Mês', 'Ano'];
 
 type CategoriaGasto = { nome: string; valor: number; cor: string };
 
-// TODO: trocar por dados calculados a partir das transações cadastradas
-const DADOS: Record<Periodo, CategoriaGasto[]> = {
-  Semana: [
-    { nome: 'Alimentação', valor: 542.5, cor: '#8B7FE8' },
-    { nome: 'Moradia', valor: 465, cor: '#F29E7D' },
-    { nome: 'Transporte', valor: 310, cor: '#4FCB9E' },
-    { nome: 'Lazer', valor: 232.5, cor: '#F08CB0' },
-  ],
-  Mês: [
-    { nome: 'Alimentação', valor: 1200, cor: '#8B7FE8' },
-    { nome: 'Moradia', valor: 1500, cor: '#F29E7D' },
-    { nome: 'Transporte', valor: 600, cor: '#4FCB9E' },
-    { nome: 'Lazer', valor: 400, cor: '#F08CB0' },
-  ],
-  Ano: [
-    { nome: 'Alimentação', valor: 14000, cor: '#8B7FE8' },
-    { nome: 'Moradia', valor: 18000, cor: '#F29E7D' },
-    { nome: 'Transporte', valor: 7200, cor: '#4FCB9E' },
-    { nome: 'Lazer', valor: 4800, cor: '#F08CB0' },
-  ],
+const CORES: Record<string, string> = {
+  Alimentação: '#8B7FE8',
+  Moradia: '#F29E7D',
+  Transporte: '#4FCB9E',
+  Lazer: '#F08CB0',
+  Outros: '#9B9B9B',
 };
-
-const PERIODOS: Periodo[] = ['Semana', 'Mês', 'Ano'];
-
-function formatarMoeda(valor: number) {
-  const [inteiro, decimal] = valor.toFixed(2).split('.');
-  const comMilhar = inteiro.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-  return `R$ ${comMilhar},${decimal}`;
-}
 
 const TAMANHO = 200;
 const ESPESSURA = 36;
@@ -48,12 +29,37 @@ const RAIO = (TAMANHO - ESPESSURA) / 2;
 const CIRCUNFERENCIA = 2 * Math.PI * RAIO;
 
 export default function GraficosScreen({ navigation }: Props) {
+  const { transacoes } = useTransacoes();
   const [periodo, setPeriodo] = useState<Periodo>('Semana');
 
-  const categorias = DADOS[periodo];
+  const inicio = inicioPeriodoISO(periodo);
+  const hoje = dataHojeISO();
+
+  // Só despesas dentro do período
+  const despesas = transacoes.filter(
+    (t) => t.tipo === 'despesa' && t.data >= inicio && t.data <= hoje
+  );
+
+  // Soma por categoria
+  const somas: Record<string, number> = {};
+  despesas.forEach((t) => {
+    somas[t.categoria] = (somas[t.categoria] || 0) + t.valorCentavos;
+  });
+
+  const categorias: CategoriaGasto[] = Object.keys(somas)
+    .map((nome) => ({ nome, valor: somas[nome], cor: CORES[nome] || CORES.Outros }))
+    .sort((a, b) => b.valor - a.valor);
+
   const total = categorias.reduce((soma, c) => soma + c.valor, 0);
 
+  // Calcula onde cada fatia começa no círculo
   let acumulado = 0;
+  const fatias = categorias.map((c) => {
+    const tamanho = (c.valor / total) * CIRCUNFERENCIA;
+    const fatia = { ...c, tamanho, deslocamento: -acumulado };
+    acumulado += tamanho;
+    return fatia;
+  });
 
   return (
     <View style={styles.container}>
@@ -83,46 +89,47 @@ export default function GraficosScreen({ navigation }: Props) {
           <Text style={styles.valorTotal}>{formatarMoeda(total)}</Text>
         </View>
 
-        <View style={styles.areaGrafico}>
-          <Svg width={TAMANHO} height={TAMANHO}>
-            <G rotation="-90" origin={`${TAMANHO / 2}, ${TAMANHO / 2}`}>
-              {categorias.map((c) => {
-                const tamanho = (c.valor / total) * CIRCUNFERENCIA;
-                const deslocamento = -acumulado;
-                acumulado += tamanho;
-                return (
-                  <Circle
-                    key={c.nome}
-                    cx={TAMANHO / 2}
-                    cy={TAMANHO / 2}
-                    r={RAIO}
-                    stroke={c.cor}
-                    strokeWidth={ESPESSURA}
-                    fill="none"
-                    strokeDasharray={`${tamanho} ${CIRCUNFERENCIA - tamanho}`}
-                    strokeDashoffset={deslocamento}
-                  />
-                );
-              })}
-            </G>
-          </Svg>
-          <View style={styles.centroGrafico}>
-            <Text style={styles.valorCentro}>{formatarMoeda(total)}</Text>
-          </View>
-        </View>
-
-        <Text style={styles.tituloSecao}>Por categoria</Text>
-
-        {categorias.map((c) => (
-          <View key={c.nome} style={styles.linhaCategoria}>
-            <View style={[styles.marcador, { backgroundColor: c.cor }]} />
-            <View style={styles.infoCategoria}>
-              <Text style={styles.nomeCategoria}>{c.nome}</Text>
-              <Text style={styles.percentual}>{Math.round((c.valor / total) * 100)}%</Text>
+        {categorias.length === 0 ? (
+          <Text style={styles.vazio}>Nenhuma despesa neste período.</Text>
+        ) : (
+          <>
+            <View style={styles.areaGrafico}>
+              <Svg width={TAMANHO} height={TAMANHO}>
+                <G rotation="-90" origin={`${TAMANHO / 2}, ${TAMANHO / 2}`}>
+                  {fatias.map((f) => (
+                    <Circle
+                      key={f.nome}
+                      cx={TAMANHO / 2}
+                      cy={TAMANHO / 2}
+                      r={RAIO}
+                      stroke={f.cor}
+                      strokeWidth={ESPESSURA}
+                      fill="none"
+                      strokeDasharray={`${f.tamanho} ${CIRCUNFERENCIA - f.tamanho}`}
+                      strokeDashoffset={f.deslocamento}
+                    />
+                  ))}
+                </G>
+              </Svg>
+              <View style={styles.centroGrafico}>
+                <Text style={styles.valorCentro}>{formatarMoeda(total)}</Text>
+              </View>
             </View>
-            <Text style={styles.valorCategoria}>{formatarMoeda(c.valor)}</Text>
-          </View>
-        ))}
+
+            <Text style={styles.tituloSecao}>Por categoria</Text>
+
+            {categorias.map((c) => (
+              <View key={c.nome} style={styles.linhaCategoria}>
+                <View style={[styles.marcador, { backgroundColor: c.cor }]} />
+                <View style={styles.infoCategoria}>
+                  <Text style={styles.nomeCategoria}>{c.nome}</Text>
+                  <Text style={styles.percentual}>{Math.round((c.valor / total) * 100)}%</Text>
+                </View>
+                <Text style={styles.valorCategoria}>{formatarMoeda(c.valor)}</Text>
+              </View>
+            ))}
+          </>
+        )}
       </ScrollView>
 
       <BottomBar ativo="Graficos" />
@@ -159,6 +166,7 @@ const styles = StyleSheet.create({
   },
   labelTotal: { fontSize: 12, color: 'rgba(255,255,255,0.8)', marginBottom: 4 },
   valorTotal: { fontSize: 22, fontWeight: '700', color: '#FFFFFF' },
+  vazio: { fontSize: 13, color: colors.textSecondary, textAlign: 'center', paddingVertical: 24 },
   areaGrafico: {
     alignSelf: 'center',
     width: TAMANHO,

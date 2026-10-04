@@ -45,3 +45,18 @@ export function rotuloData(iso: string) {
   if (iso === paraISO(ontem)) return 'Ontem';
   return isoParaBR(iso);
 }
+
+// Primeiro dia (AAAA-MM-DD) de cada período, contando até hoje
+// Semana = últimos 7 dias, Mês = mês atual, Ano = ano atual
+export function inicioPeriodoISO(periodo: 'Semana' | 'Mês' | 'Ano') {
+  const hoje = new Date();
+  if (periodo === 'Semana') {
+    const inicio = new Date();
+    inicio.setDate(hoje.getDate() - 6);
+    return paraISO(inicio);
+  }
+  if (periodo === 'Mês') {
+    return paraISO(new Date(hoje.getFullYear(), hoje.getMonth(), 1));
+  }
+  return paraISO(new Date(hoje.getFullYear(), 0, 1));
+}
