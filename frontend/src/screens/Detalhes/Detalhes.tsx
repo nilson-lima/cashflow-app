@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Alert, Modal } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Modal } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../navigation/AppNavigator';
@@ -23,9 +23,9 @@ export default function DetalhesScreen({ navigation, route }: Props) {
   const ehDespesa = transacao.tipo === 'despesa';
   const corValor = ehDespesa ? colors.expense : colors.income;
 
-  // TODO: abrir a tela de Editar quando ela existir
+  // TODO: abrir a tela de Editar 
   function handleEditar() {
-    Alert.alert('Em breve', 'A tela de edição ainda não foi implementada.');
+    navigation.navigate('EditarTransacao', { id: transacao!.id });
   }
 
   function handleConfirmarExclusao() {

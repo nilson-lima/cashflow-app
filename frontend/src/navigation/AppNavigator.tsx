@@ -7,6 +7,7 @@ import GraficosScreen from '../screens/Graficos/Graficos';
 import NovaTransacaoScreen from '../screens/NovaTransacao/NovaTransacao';
 import ExtratoScreen from '../screens/Extrato/Extrato';
 import DetalhesScreen from '../screens/Detalhes/Detalhes';
+import EditarTransacaoScreen from '../screens/EditarTransacao/EditarTransacao';
 
 export type RootStackParamList = {
   Login: undefined;
@@ -16,6 +17,7 @@ export type RootStackParamList = {
   NovaTransacao: undefined;
   Extrato: undefined;
   Detalhes: { id: string };
+  EditarTransacao: { id: string };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -29,6 +31,7 @@ export default function AppNavigator() {
       <Stack.Screen name="Graficos" component={GraficosScreen} options={{ animation: 'none' }} />
       <Stack.Screen name="Extrato" component={ExtratoScreen} options={{ animation: 'none' }} />
       <Stack.Screen name="Detalhes" component={DetalhesScreen} />
+      <Stack.Screen name="EditarTransacao" component={EditarTransacaoScreen} />
       <Stack.Screen
         name="NovaTransacao"
         component={NovaTransacaoScreen}
