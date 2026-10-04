@@ -10,6 +10,7 @@ import {
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../navigation/AppNavigator';
 import { colors } from '../../theme/colors';
+import { useAuth } from '../../contexts/AuthContext';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Cadastro'>;
 
@@ -17,8 +18,9 @@ export default function CadastroScreen({ navigation }: Props) {
   const [nome, setNome] = useState('');
   const [email, setEmail] = useState('');
   const [senha, setSenha] = useState('');
+  const { cadastrar } = useAuth();
 
-  function handleCadastrar() {
+  async function handleCadastrar() {
     if (!nome.trim() || !email.trim() || !senha.trim()) {
       Alert.alert('Campos obrigatórios', 'Preencha nome, e-mail e senha para continuar.');
       return;
@@ -34,7 +36,12 @@ export default function CadastroScreen({ navigation }: Props) {
       return;
     }
 
-    // TODO: salvar usuário (autenticação simulada)
+    const resultado = await cadastrar(nome, email, senha);
+    if (!resultado.ok) {
+      Alert.alert('Não foi possível cadastrar', resultado.erro);
+      return;
+    }
+
     Alert.alert('Conta criada!', 'Agora é só entrar com seu e-mail e senha.', [
       { text: 'OK', onPress: () => navigation.goBack() },
     ]);

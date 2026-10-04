@@ -6,12 +6,14 @@ import type { RootStackParamList } from '../../navigation/AppNavigator';
 import { colors } from '../../theme/colors';
 import BottomBar from '../../components/BottomBar';
 import { useTransacoes } from '../../contexts/TransacoesContext';
+import { useAuth } from '../../contexts/AuthContext';
 import { formatarMoeda, rotuloData } from '../../utils/formatters';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Dashboard'>;
 
 export default function DashboardScreen({ navigation }: Props) {
   const { transacoes } = useTransacoes();
+  const { usuario } = useAuth();
 
   const receitas = transacoes
     .filter((t) => t.tipo === 'receita')
@@ -26,7 +28,7 @@ export default function DashboardScreen({ navigation }: Props) {
   return (
     <View style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
-        <Text style={styles.saudacao}>Olá, Usuário</Text>
+        <Text style={styles.saudacao}>Olá, {usuario?.nome.split(' ')[0] ?? 'Usuário'}</Text>
         <Text style={styles.subtitulo}>Seu resumo financeiro</Text>
 
         <View style={styles.cardSaldo}>
