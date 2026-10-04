@@ -19,15 +19,15 @@ export default function BottomBar({ ativo }: Props) {
     Alert.alert('Em breve', 'Essa tela ainda não foi implementada.');
   }
 
-    function irPara(aba: Aba) {
+  function irPara(aba: Aba) {
     if (aba === ativo) return;
 
     if (aba === 'Inicio') {
-      navigation.replace('Dashboard');
+      navigation.popTo('Dashboard');
     } else if (aba === 'Graficos') {
-      navigation.replace('Graficos');
+      navigation.popTo('Graficos');
     } else if (aba === 'Extrato') {
-      navigation.replace('Extrato');
+      navigation.popTo('Extrato');
     } else {
       // TODO: ligar Perfil quando a tela existir
       telaEmBreve();

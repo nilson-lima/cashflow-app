@@ -42,9 +42,9 @@ export default function ExtratoScreen({ navigation }: Props) {
     Alert.alert('Em breve', 'A tela de filtros ainda não foi implementada.');
   }
 
-  // TODO: abrir Detalhes da Transação quando a tela existir
-  function abrirDetalhes(_t: Transacao) {
-    Alert.alert('Em breve', 'A tela de detalhes ainda não foi implementada.');
+  // TODO: abrir Detalhes da Transação 
+    function abrirDetalhes(t: Transacao) {
+    navigation.navigate('Detalhes', { id: t.id });
   }
 
   return (

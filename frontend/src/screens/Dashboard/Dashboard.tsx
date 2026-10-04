@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, ScrollView, StyleSheet } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../navigation/AppNavigator';
@@ -66,7 +66,11 @@ export default function DashboardScreen({ navigation }: Props) {
         )}
 
         {recentes.map((t) => (
-          <View key={t.id} style={styles.itemTransacao}>
+          <TouchableOpacity
+            key={t.id}
+            style={styles.itemTransacao}
+            onPress={() => navigation.navigate('Detalhes', { id: t.id })}
+          >
             <View style={styles.iconeTransacao}>
               <Ionicons
                 name={t.tipo === 'despesa' ? 'cart-outline' : 'cash-outline'}
@@ -84,7 +88,7 @@ export default function DashboardScreen({ navigation }: Props) {
               {t.tipo === 'despesa' ? '- ' : '+ '}
               {formatarMoeda(t.valorCentavos)}
             </Text>
-          </View>
+          </TouchableOpacity>
         ))}
       </ScrollView>
 
