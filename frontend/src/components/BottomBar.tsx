@@ -29,8 +29,7 @@ export default function BottomBar({ ativo }: Props) {
     } else if (aba === 'Extrato') {
       navigation.popTo('Extrato');
     } else {
-      // TODO: ligar Perfil quando a tela existir
-      telaEmBreve();
+      navigation.popTo('Perfil');
     }
   }
 

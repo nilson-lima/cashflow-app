@@ -10,14 +10,16 @@ import {
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../navigation/AppNavigator';
 import { colors } from '../../theme/colors';
+import { useAuth } from '../../contexts/AuthContext';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Login'>;
 
 export default function LoginScreen({ navigation }: Props) {
   const [email, setEmail] = useState('');
   const [senha, setSenha] = useState('');
+  const { entrar } = useAuth();
 
-  function handleEntrar() {
+  async function handleEntrar() {
     if (!email.trim() || !senha.trim()) {
       Alert.alert('Campos obrigatórios', 'Preencha e-mail e senha para continuar.');
       return;
@@ -28,7 +30,12 @@ export default function LoginScreen({ navigation }: Props) {
       return;
     }
 
-    // TODO: conferir usuário cadastrado (autenticação simulada)
+    const resultado = await entrar(email, senha);
+    if (!resultado.ok) {
+      Alert.alert('Não foi possível entrar', resultado.erro);
+      return;
+    }
+
     navigation.replace('Dashboard');
   }
 
