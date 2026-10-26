@@ -16,22 +16,23 @@ function iniciais(nome: string) {
   return (primeira + ultima).toUpperCase();
 }
 
-const ITENS: { icone: keyof typeof Ionicons.glyphMap; rotulo: string }[] = [
-  { icone: 'person-outline', rotulo: 'Meus Dados' },
-  { icone: 'lock-closed-outline', rotulo: 'Alterar Senha' },
-  { icone: 'notifications-outline', rotulo: 'Notificações' },
-  { icone: 'pricetag-outline', rotulo: 'Categorias' },
+type RotaPerfil = 'MeusDados' | 'AlterarSenha' | 'Notificacoes' | 'Categorias';
+
+const ITENS: {
+  icone: keyof typeof Ionicons.glyphMap;
+  rotulo: string;
+  rota: RotaPerfil;
+}[] = [
+  { icone: 'person-outline', rotulo: 'Meus Dados', rota: 'MeusDados' },
+  { icone: 'lock-closed-outline', rotulo: 'Alterar Senha', rota: 'AlterarSenha' },
+  { icone: 'notifications-outline', rotulo: 'Notificações', rota: 'Notificacoes' },
+  { icone: 'pricetag-outline', rotulo: 'Categorias', rota: 'Categorias' },
 ];
 
 export default function PerfilScreen({ navigation }: Props) {
   const { usuario, sair } = useAuth();
 
   if (!usuario) return null;
-
-  // TODO: implementar estas telas quando forem definidas no projeto
-  function itemEmBreve(rotulo: string) {
-    Alert.alert('Em breve', `"${rotulo}" ainda não foi implementado.`);
-  }
 
   function handleSair() {
     Alert.alert('Sair da conta', 'Deseja realmente sair?', [
@@ -65,7 +66,7 @@ export default function PerfilScreen({ navigation }: Props) {
           <TouchableOpacity
             key={item.rotulo}
             style={styles.item}
-            onPress={() => itemEmBreve(item.rotulo)}
+            onPress={() => navigation.navigate(item.rota)}
           >
             <Ionicons name={item.icone} size={18} color={colors.primary} />
             <Text style={styles.rotuloItem}>{item.rotulo}</Text>
