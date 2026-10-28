@@ -160,7 +160,7 @@ Pré-requisitos: Python 3 e Git. Os comandos abaixo são para Windows (PowerShel
 ### Status do back-end
 
 - ✅ Estrutura inicial da API (servidor rodando e `/docs` acessível)
-- 🔄 Arquitetura e organização do back-end (pastas e documentação)
+- ✅ Arquitetura e organização do back-end (pastas e documentação)
 - ⏳ Conexão com o PostgreSQL e rota `/saude`
 - ⏳ Models, schemas e rotas
 - ⏳ Serviço de fechamento de caixa, com testes
