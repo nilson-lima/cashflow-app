@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 import app.models
 from app.database.connection import Base, SessionLocal, engine, get_db
 from app.models.categoria import Categoria
+from app.routes.auth_route import router as auth_router
 
 CATEGORIAS_PADRAO = [
     "Alimentação",
@@ -38,6 +39,8 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="CashFlow API", lifespan=lifespan)
+
+app.include_router(auth_router)
 
 
 @app.get("/")
