@@ -1,8 +1,10 @@
+from datetime import date
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.categoria import Categoria
-from app.models.movimentacao import Movimentacao
+from app.models.movimentacao import Movimentacao, TipoMovimentacao
 from app.schemas.movimentacao_schema import MovimentacaoEntrada
 
 
@@ -33,12 +35,25 @@ def buscar(db: Session, usuario_id: int, movimentacao_id: int) -> Movimentacao:
     return movimentacao
 
 
-def listar(db: Session, usuario_id: int) -> list[Movimentacao]:
-    consulta = (
-        select(Movimentacao)
-        .where(Movimentacao.usuario_id == usuario_id)
-        .order_by(Movimentacao.data.desc(), Movimentacao.id.desc())
-    )
+def listar(
+    db: Session,
+    usuario_id: int,
+    data_inicial: date | None = None,
+    data_final: date | None = None,
+    categoria_id: int | None = None,
+    tipo: TipoMovimentacao | None = None,
+) -> list[Movimentacao]:
+    # Sempre filtra pelo usuário; os demais filtros só entram se foram informados.
+    consulta = select(Movimentacao).where(Movimentacao.usuario_id == usuario_id)
+    if data_inicial is not None:
+        consulta = consulta.where(Movimentacao.data >= data_inicial)
+    if data_final is not None:
+        consulta = consulta.where(Movimentacao.data <= data_final)
+    if categoria_id is not None:
+        consulta = consulta.where(Movimentacao.categoria_id == categoria_id)
+    if tipo is not None:
+        consulta = consulta.where(Movimentacao.tipo == tipo)
+    consulta = consulta.order_by(Movimentacao.data.desc(), Movimentacao.id.desc())
     return list(db.scalars(consulta))
 
 

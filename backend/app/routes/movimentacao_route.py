@@ -1,7 +1,10 @@
+from datetime import date
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.database.connection import get_db
+from app.models.movimentacao import TipoMovimentacao
 from app.models.usuario import Usuario
 from app.routes.dependencias import obter_usuario_logado
 from app.schemas.movimentacao_schema import MovimentacaoEntrada, MovimentacaoResposta
@@ -27,10 +30,19 @@ def criar(
 
 @router.get("", response_model=list[MovimentacaoResposta])
 def listar(
+    data_inicial: date | None = None,
+    data_final: date | None = None,
+    categoria_id: int | None = None,
+    tipo: TipoMovimentacao | None = None,
     db: Session = Depends(get_db),
     usuario: Usuario = Depends(obter_usuario_logado),
 ):
-    return service.listar(db, usuario.id)
+    # Um período invertido nunca devolveria nada: melhor avisar do que devolver lista vazia.
+    if data_inicial is not None and data_final is not None and data_inicial > data_final:
+        raise HTTPException(
+            status_code=422, detail="data_inicial não pode ser depois de data_final"
+        )
+    return service.listar(db, usuario.id, data_inicial, data_final, categoria_id, tipo)
 
 
 @router.get("/{movimentacao_id}", response_model=MovimentacaoResposta)

@@ -11,6 +11,7 @@ from app.routes.auth_route import router as auth_router
 from app.routes.categoria_route import router as categoria_router
 from app.routes.movimentacao_route import router as movimentacao_router
 from app.routes.resumo_route import router as resumo_router  
+from app.routes.grafico_route import router as grafico_router
 
 CATEGORIAS_PADRAO = [
     "Alimentação",
@@ -47,6 +48,7 @@ app.include_router(auth_router)
 app.include_router(categoria_router)
 app.include_router(movimentacao_router)
 app.include_router(resumo_router)  
+app.include_router(grafico_router)
 
 
 @app.get("/")
