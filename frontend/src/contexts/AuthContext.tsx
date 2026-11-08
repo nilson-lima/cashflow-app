@@ -1,81 +1,95 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { api, ApiError, definirAoNaoAutorizado } from '../services/api';
+import { apagarToken, salvarToken } from '../services/tokenStorage';
 
-const CHAVE_USUARIOS = '@cashflow:usuarios';
-const CHAVE_SESSAO = '@cashflow:sessao';
+// Usuário como a API devolve em GET /auth/eu.
+export type Usuario = {
+  id: number;
+  nome: string;
+  email: string;
+};
 
-export type Usuario = { nome: string; email: string };
-type UsuarioSalvo = Usuario & { senha: string };
-type Resultado = { ok: boolean; erro?: string };
+// Resultado das ações: ok:true, ou ok:false com a mensagem para mostrar na tela.
+type Resultado = { ok: true } | { ok: false; erro: string };
 
 type AuthContextData = {
   usuario: Usuario | null;
-  carregando: boolean;
+  carregando: boolean; // true enquanto o app verifica se já há sessão
   cadastrar: (nome: string, email: string, senha: string) => Promise<Resultado>;
   entrar: (email: string, senha: string) => Promise<Resultado>;
   sair: () => Promise<void>;
 };
 
-const AuthContext = createContext<AuthContextData | undefined>(undefined);
+const AuthContext = createContext<AuthContextData>({} as AuthContextData);
 
-async function lerUsuarios(): Promise<UsuarioSalvo[]> {
-  try {
-    const json = await AsyncStorage.getItem(CHAVE_USUARIOS);
-    return json ? JSON.parse(json) : [];
-  } catch {
-    return [];
-  }
+function mensagemDoErro(e: unknown): string {
+  return e instanceof ApiError ? e.message : 'Ocorreu um erro inesperado.';
 }
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
+export function AuthProvider({ children }: { children: ReactNode }) {
   const [usuario, setUsuario] = useState<Usuario | null>(null);
   const [carregando, setCarregando] = useState(true);
 
-  // Ao abrir o app, recupera a sessão (se o usuário não tinha saído)
   useEffect(() => {
-    async function carregarSessao() {
+    // Se qualquer chamada receber 401, encerra a sessão (volta ao Login).
+    definirAoNaoAutorizado(() => {
+      apagarToken();
+      setUsuario(null);
+    });
+
+    // Ao abrir o app: se existe token válido, restaura a sessão.
+    async function restaurarSessao() {
       try {
-        const email = await AsyncStorage.getItem(CHAVE_SESSAO);
-        if (email) {
-          const usuarios = await lerUsuarios();
-          const encontrado = usuarios.find((u) => u.email === email);
-          if (encontrado) setUsuario({ nome: encontrado.nome, email: encontrado.email });
-        }
-      } catch {}
-      setCarregando(false);
+        // A api.get anexa o token sozinha; sem token o /auth/eu devolve 401.
+        const eu = await api.get<Usuario>('/auth/eu');
+        setUsuario(eu);
+      } catch {
+        // Sem token, token inválido ou API fora do ar: cai no Login.
+        setUsuario(null);
+      } finally {
+        setCarregando(false);
+      }
     }
-    carregarSessao();
+    restaurarSessao();
+
+    return () => definirAoNaoAutorizado(null);
   }, []);
 
+  // Cria a conta. NÃO faz login: a tela volta ao Login depois.
   async function cadastrar(nome: string, email: string, senha: string): Promise<Resultado> {
-    const emailNormalizado = email.trim().toLowerCase();
-    const usuarios = await lerUsuarios();
-
-    if (usuarios.some((u) => u.email === emailNormalizado)) {
-      return { ok: false, erro: 'Já existe uma conta com esse e-mail.' };
+    try {
+      await api.post(
+        '/auth/cadastro',
+        { nome: nome.trim(), email: email.trim().toLowerCase(), senha },
+        { comToken: false }
+      );
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, erro: mensagemDoErro(e) };
     }
-
-    usuarios.push({ nome: nome.trim(), email: emailNormalizado, senha });
-    await AsyncStorage.setItem(CHAVE_USUARIOS, JSON.stringify(usuarios));
-    return { ok: true };
   }
 
+  // Login: pede o token, guarda com segurança e busca os dados do usuário.
   async function entrar(email: string, senha: string): Promise<Resultado> {
-    const emailNormalizado = email.trim().toLowerCase();
-    const usuarios = await lerUsuarios();
-    const encontrado = usuarios.find((u) => u.email === emailNormalizado && u.senha === senha);
-
-    if (!encontrado) {
-      return { ok: false, erro: 'E-mail ou senha incorretos.' };
+    try {
+      const resp = await api.post<{ access_token: string; token_type: string }>(
+        '/auth/login',
+        { email: email.trim().toLowerCase(), senha },
+        { comToken: false }
+      );
+      await salvarToken(resp.access_token);
+      const eu = await api.get<Usuario>('/auth/eu');
+      setUsuario(eu);
+      return { ok: true };
+    } catch (e) {
+      await apagarToken();
+      return { ok: false, erro: mensagemDoErro(e) };
     }
-
-    await AsyncStorage.setItem(CHAVE_SESSAO, encontrado.email);
-    setUsuario({ nome: encontrado.nome, email: encontrado.email });
-    return { ok: true };
   }
 
-  async function sair() {
-    await AsyncStorage.removeItem(CHAVE_SESSAO);
+  // Logout: apaga o token e zera o usuário.
+  async function sair(): Promise<void> {
+    await apagarToken();
     setUsuario(null);
   }
 
@@ -87,9 +101,5 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 }
 
 export function useAuth() {
-  const contexto = useContext(AuthContext);
-  if (!contexto) {
-    throw new Error('useAuth deve ser usado dentro de AuthProvider');
-  }
-  return contexto;
+  return useContext(AuthContext);
 }
