@@ -7,6 +7,7 @@ import {
   StyleSheet,
   Alert,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../navigation/AppNavigator';
 import { colors } from '../../theme/colors';
@@ -17,6 +18,10 @@ type Props = NativeStackScreenProps<RootStackParamList, 'Login'>;
 export default function LoginScreen({ navigation }: Props) {
   const [email, setEmail] = useState('');
   const [senha, setSenha] = useState('');
+  // true = senha visível; false = senha escondida (começa escondida).
+  const [mostrarSenha, setMostrarSenha] = useState(false);
+  // true enquanto a chamada à API está em andamento (evita toques repetidos).
+  const [enviando, setEnviando] = useState(false);
   const { entrar } = useAuth();
 
   async function handleEntrar() {
@@ -30,7 +35,10 @@ export default function LoginScreen({ navigation }: Props) {
       return;
     }
 
+    setEnviando(true);
     const resultado = await entrar(email, senha);
+    setEnviando(false);
+
     if (!resultado.ok) {
       Alert.alert('Não foi possível entrar', resultado.erro);
       return;
@@ -54,22 +62,43 @@ export default function LoginScreen({ navigation }: Props) {
         keyboardType="email-address"
       />
 
-      <TextInput
-        style={styles.input}
-        placeholder="Senha"
-        placeholderTextColor={colors.placeholder}
-        value={senha}
-        onChangeText={setSenha}
-        secureTextEntry
-      />
+      {/* Campo de senha: o TextInput e o botão do olhinho ficam lado a lado
+          dentro de um contêiner que desenha a borda. */}
+      <View style={styles.campoSenha}>
+        <TextInput
+          style={styles.inputSenha}
+          placeholder="Senha"
+          placeholderTextColor={colors.placeholder}
+          value={senha}
+          onChangeText={setSenha}
+          secureTextEntry={!mostrarSenha}
+          autoCapitalize="none"
+          autoCorrect={false}
+        />
+        <TouchableOpacity
+          onPress={() => setMostrarSenha(!mostrarSenha)}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          accessibilityLabel={mostrarSenha ? 'Esconder senha' : 'Mostrar senha'}
+        >
+          <Ionicons
+            name={mostrarSenha ? 'eye-off-outline' : 'eye-outline'}
+            size={22}
+            color={colors.textSecondary}
+          />
+        </TouchableOpacity>
+      </View>
 
-      <TouchableOpacity style={styles.botao} onPress={handleEntrar}>
-        <Text style={styles.textoBotao}>Entrar</Text>
+      <TouchableOpacity
+        style={[styles.botao, enviando && styles.botaoDesabilitado]}
+        onPress={handleEntrar}
+        disabled={enviando}
+      >
+        <Text style={styles.textoBotao}>{enviando ? 'Entrando...' : 'Entrar'}</Text>
       </TouchableOpacity>
 
       <View style={styles.linhaLink}>
         <Text style={styles.textoLink}>Não tem uma conta? </Text>
-        <TouchableOpacity onPress={() => navigation.navigate('Cadastro')}>
+        <TouchableOpacity onPress={() => navigation.navigate('Cadastro')} disabled={enviando}>
           <Text style={styles.link}>Cadastre-se</Text>
         </TouchableOpacity>
       </View>
@@ -105,12 +134,32 @@ const styles = StyleSheet.create({
     marginBottom: 14,
     fontSize: 14,
   },
+  // Contêiner do campo de senha: tem o mesmo visual dos outros campos.
+  campoSenha: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.inputBackground,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 12,
+    paddingRight: 14,
+    marginBottom: 14,
+  },
+  // O texto ocupa todo o espaço que sobrar ao lado do ícone.
+  inputSenha: {
+    flex: 1,
+    padding: 14,
+    fontSize: 14,
+  },
   botao: {
     backgroundColor: colors.primary,
     borderRadius: 12,
     padding: 14,
     alignItems: 'center',
     marginTop: 8,
+  },
+  botaoDesabilitado: {
+    opacity: 0.6,
   },
   textoBotao: {
     color: '#FFFFFF',
