@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Modal } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Modal, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../navigation/AppNavigator';
@@ -14,6 +14,8 @@ export default function DetalhesScreen({ navigation, route }: Props) {
   const { id } = route.params;
   const { transacoes, excluirTransacao } = useTransacoes();
   const [modalAberto, setModalAberto] = useState(false);
+  // true enquanto a API está excluindo (evita toques repetidos)
+  const [excluindo, setExcluindo] = useState(false);
 
   const transacao = transacoes.find((t) => t.id === id);
 
@@ -23,13 +25,22 @@ export default function DetalhesScreen({ navigation, route }: Props) {
   const ehDespesa = transacao.tipo === 'despesa';
   const corValor = ehDespesa ? colors.expense : colors.income;
 
-  // TODO: abrir a tela de Editar 
   function handleEditar() {
     navigation.navigate('EditarTransacao', { id: transacao!.id });
   }
 
-  function handleConfirmarExclusao() {
-    excluirTransacao(transacao!.id);
+  async function handleConfirmarExclusao() {
+    setExcluindo(true);
+    const resultado = await excluirTransacao(transacao!.id);
+
+    if (!resultado.ok) {
+      setExcluindo(false);
+      setModalAberto(false);
+      Alert.alert('Não foi possível excluir', resultado.erro);
+      return;
+    }
+
+    // Deu certo: a lista já foi atualizada, então só fecha a confirmação e volta
     setModalAberto(false);
     navigation.goBack();
   }
@@ -61,7 +72,8 @@ export default function DetalhesScreen({ navigation, route }: Props) {
 
         <View style={styles.tabela}>
           <Linha rotulo="Tipo" valor={ehDespesa ? 'Despesa' : 'Receita'} cor={corValor} />
-          <Linha rotulo="Categoria" valor={transacao.categoria} />
+          {/* Receita não tem categoria, então a linha só aparece para despesa */}
+          {ehDespesa && <Linha rotulo="Categoria" valor={transacao.categoria} />}
           <Linha rotulo="Data" valor={isoParaBR(transacao.data)} />
           <Linha rotulo="Descrição" valor={transacao.descricao} ultima />
         </View>
@@ -81,7 +93,9 @@ export default function DetalhesScreen({ navigation, route }: Props) {
         visible={modalAberto}
         transparent
         animationType="fade"
-        onRequestClose={() => setModalAberto(false)}
+        onRequestClose={() => {
+          if (!excluindo) setModalAberto(false);
+        }}
       >
         <View style={styles.overlay}>
           <View style={styles.modal}>
@@ -94,10 +108,20 @@ export default function DetalhesScreen({ navigation, route }: Props) {
               extrato e deixará de contar no saldo. Esta ação não pode ser desfeita.
             </Text>
 
-            <TouchableOpacity style={styles.botaoConfirmar} onPress={handleConfirmarExclusao}>
-              <Text style={styles.textoConfirmar}>Excluir Transação</Text>
+            <TouchableOpacity
+              style={[styles.botaoConfirmar, excluindo && styles.botaoDesabilitado]}
+              onPress={handleConfirmarExclusao}
+              disabled={excluindo}
+            >
+              <Text style={styles.textoConfirmar}>
+                {excluindo ? 'Excluindo...' : 'Excluir Transação'}
+              </Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.botaoCancelar} onPress={() => setModalAberto(false)}>
+            <TouchableOpacity
+              style={[styles.botaoCancelar, excluindo && styles.botaoDesabilitado]}
+              onPress={() => setModalAberto(false)}
+              disabled={excluindo}
+            >
               <Text style={styles.textoCancelar}>Cancelar</Text>
             </TouchableOpacity>
           </View>
@@ -242,6 +266,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 8,
   },
+  botaoDesabilitado: { opacity: 0.6 },
   textoConfirmar: { color: '#FFFFFF', fontSize: 13, fontWeight: '600' },
   botaoCancelar: {
     width: '100%',

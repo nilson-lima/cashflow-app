@@ -22,8 +22,8 @@ export type RootStackParamList = {
   Graficos: undefined;
   NovaTransacao: undefined;
   Extrato: undefined;
-  Detalhes: { id: string };
-  EditarTransacao: { id: string };
+  Detalhes: { id: number }; // id da movimentação na API (número inteiro)
+  EditarTransacao: { id: number };
   Perfil: undefined;
   MeusDados: undefined;
   AlterarSenha: undefined;

@@ -18,11 +18,6 @@ import { formatarMoeda, isoParaBR, brParaISO } from '../../utils/formatters';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'EditarTransacao'>;
 
-const CATEGORIAS: Record<TipoTransacao, string[]> = {
-  despesa: ['Alimentação', 'Moradia', 'Transporte', 'Lazer', 'Outros'],
-  receita: ['Salário', 'Outros'],
-};
-
 function aplicarMascaraData(texto: string) {
   const d = texto.replace(/\D/g, '').slice(0, 8);
   if (d.length <= 2) return d;
@@ -32,7 +27,8 @@ function aplicarMascaraData(texto: string) {
 
 export default function EditarTransacaoScreen({ navigation, route }: Props) {
   const { id } = route.params;
-  const { transacoes, editarTransacao } = useTransacoes();
+  // "categorias" vem da API e já não inclui a Renda
+  const { transacoes, categorias, editarTransacao } = useTransacoes();
 
   const original = transacoes.find((t) => t.id === id);
 
@@ -40,19 +36,21 @@ export default function EditarTransacaoScreen({ navigation, route }: Props) {
   const [tipo, setTipo] = useState<TipoTransacao>(original?.tipo ?? 'despesa');
   const [valorCentavos, setValorCentavos] = useState(original?.valorCentavos ?? 0);
   const [descricao, setDescricao] = useState(original?.descricao ?? '');
-  const [categoria, setCategoria] = useState(original?.categoria ?? '');
+  const [categoriaId, setCategoriaId] = useState<number | null>(original?.categoriaId ?? null);
   const [listaAberta, setListaAberta] = useState(false);
   const [data, setData] = useState(original ? isoParaBR(original.data) : '');
+  // true enquanto a API está salvando (evita toques repetidos)
+  const [enviando, setEnviando] = useState(false);
 
   if (!original) return null;
 
   const corValor = tipo === 'despesa' ? colors.expense : colors.income;
+  const nomeCategoria = categorias.find((c) => c.id === categoriaId)?.nome ?? '';
 
   function trocarTipo(novo: TipoTransacao) {
     if (novo === tipo) return;
     setTipo(novo);
-    // Mantém a categoria só se ela existir no novo tipo
-    if (!CATEGORIAS[novo].includes(categoria)) setCategoria('');
+    setCategoriaId(null); // receita não tem categoria; despesa começa sem escolha
     setListaAberta(false);
   }
 
@@ -61,7 +59,7 @@ export default function EditarTransacaoScreen({ navigation, route }: Props) {
     setValorCentavos(digitos ? parseInt(digitos, 10) : 0);
   }
 
-  function handleSalvar() {
+  async function handleSalvar() {
     if (valorCentavos <= 0) {
       Alert.alert('Valor inválido', 'Informe um valor maior que zero.');
       return;
@@ -70,30 +68,33 @@ export default function EditarTransacaoScreen({ navigation, route }: Props) {
       Alert.alert('Descrição obrigatória', 'Informe uma descrição.');
       return;
     }
-    if (!categoria) {
-      Alert.alert('Categoria obrigatória', 'Selecione uma categoria.');
-      return;
-    }
     const dataISO = brParaISO(data);
     if (!dataISO) {
       Alert.alert('Data inválida', 'Use o formato dd/mm/aaaa.');
       return;
     }
 
-    editarTransacao(id, {
+    setEnviando(true);
+    const resultado = await editarTransacao(id, {
       tipo,
       valorCentavos,
       descricao: descricao.trim(),
-      categoria,
+      categoriaId: tipo === 'despesa' ? categoriaId : null,
       data: dataISO,
     });
+    setEnviando(false);
+
+    if (!resultado.ok) {
+      Alert.alert('Não foi possível salvar', resultado.erro);
+      return;
+    }
     navigation.goBack();
   }
 
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={12}>
+        <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={12} disabled={enviando}>
           <Ionicons name="arrow-back" size={22} color={colors.textPrimary} />
         </TouchableOpacity>
         <Text style={styles.titulo}>Editar Transação</Text>
@@ -136,33 +137,47 @@ export default function EditarTransacaoScreen({ navigation, route }: Props) {
           onChangeText={setDescricao}
         />
 
-        <Text style={styles.label}>Categoria</Text>
-        <TouchableOpacity style={styles.select} onPress={() => setListaAberta(!listaAberta)}>
-          <Text style={categoria ? styles.selectTexto : styles.selectPlaceholder}>
-            {categoria || 'Selecione a categoria'}
-          </Text>
-          <Ionicons
-            name={listaAberta ? 'chevron-up' : 'chevron-down'}
-            size={18}
-            color={colors.textSecondary}
-          />
-        </TouchableOpacity>
+        {/* Categoria só existe para despesa (a API não aceita categoria em receita) */}
+        {tipo === 'despesa' && (
+          <>
+            <Text style={styles.label}>Categoria</Text>
+            <TouchableOpacity style={styles.select} onPress={() => setListaAberta(!listaAberta)}>
+              <Text style={categoriaId !== null ? styles.selectTexto : styles.selectPlaceholder}>
+                {nomeCategoria || 'Sem categoria (opcional)'}
+              </Text>
+              <Ionicons
+                name={listaAberta ? 'chevron-up' : 'chevron-down'}
+                size={18}
+                color={colors.textSecondary}
+              />
+            </TouchableOpacity>
 
-        {listaAberta && (
-          <View style={styles.listaCategorias}>
-            {CATEGORIAS[tipo].map((c) => (
-              <TouchableOpacity
-                key={c}
-                style={styles.itemCategoria}
-                onPress={() => {
-                  setCategoria(c);
-                  setListaAberta(false);
-                }}
-              >
-                <Text style={styles.selectTexto}>{c}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+            {listaAberta && (
+              <View style={styles.listaCategorias}>
+                <TouchableOpacity
+                  style={styles.itemCategoria}
+                  onPress={() => {
+                    setCategoriaId(null);
+                    setListaAberta(false);
+                  }}
+                >
+                  <Text style={styles.selectPlaceholder}>Sem categoria</Text>
+                </TouchableOpacity>
+                {categorias.map((c) => (
+                  <TouchableOpacity
+                    key={c.id}
+                    style={styles.itemCategoria}
+                    onPress={() => {
+                      setCategoriaId(c.id);
+                      setListaAberta(false);
+                    }}
+                  >
+                    <Text style={styles.selectTexto}>{c.nome}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+          </>
         )}
 
         <Text style={styles.label}>Data</Text>
@@ -178,8 +193,12 @@ export default function EditarTransacaoScreen({ navigation, route }: Props) {
       </ScrollView>
 
       <View style={styles.rodape}>
-        <TouchableOpacity style={styles.botao} onPress={handleSalvar}>
-          <Text style={styles.textoBotao}>Salvar Alterações</Text>
+        <TouchableOpacity
+          style={[styles.botao, enviando && styles.botaoDesabilitado]}
+          onPress={handleSalvar}
+          disabled={enviando}
+        >
+          <Text style={styles.textoBotao}>{enviando ? 'Salvando...' : 'Salvar Alterações'}</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -255,5 +274,6 @@ const styles = StyleSheet.create({
     padding: 14,
     alignItems: 'center',
   },
+  botaoDesabilitado: { opacity: 0.6 },
   textoBotao: { color: '#FFFFFF', fontSize: 15, fontWeight: '600' },
 });
