@@ -1,5 +1,12 @@
 import React, { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
+import {
+  View,
+  Text,
+  ScrollView,
+  TouchableOpacity,
+  StyleSheet,
+  RefreshControl,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../navigation/AppNavigator';
@@ -18,7 +25,7 @@ const ABAS: Aba[] = ['Tudo', 'Entradas', 'Saídas'];
 type Grupo = { data: string; itens: Transacao[] };
 
 export default function ExtratoScreen({ navigation }: Props) {
-  const { transacoes } = useTransacoes();
+  const { transacoes, carregando, erro, recarregar } = useTransacoes();
   const [aba, setAba] = useState<Aba>('Tudo');
   const [filtros, setFiltros] = useState<FiltrosTransacao>(FILTROS_VAZIOS);
   const [filtrosAbertos, setFiltrosAbertos] = useState(false);
@@ -56,6 +63,10 @@ export default function ExtratoScreen({ navigation }: Props) {
   }
 
   function mensagemVazia() {
+    if (carregando) return 'Carregando...';
+    if (erro && transacoes.length === 0) {
+      return `${erro} Puxe a tela para baixo para tentar de novo.`;
+    }
     if (transacoes.length === 0) return 'Nenhuma transação ainda. Toque em "+" para adicionar.';
     if (filtrosAtivos) return 'Nenhuma transação encontrada com esses filtros.';
     return 'Nenhuma transação nesta categoria.';
@@ -63,7 +74,10 @@ export default function ExtratoScreen({ navigation }: Props) {
 
   return (
     <View style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        refreshControl={<RefreshControl refreshing={carregando} onRefresh={recarregar} />}
+      >
         <View style={styles.cabecalho}>
           <Text style={styles.titulo}>Extrato</Text>
           <TouchableOpacity style={styles.botaoFiltro} onPress={() => setFiltrosAbertos(true)}>
