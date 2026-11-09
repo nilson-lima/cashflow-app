@@ -14,21 +14,24 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../theme/colors';
 import { isoParaBR, brParaISO } from '../../utils/formatters';
+import { useTransacoes } from '../../contexts/TransacoesContext';
 
-// Datas em formato AAAA-MM-DD ('' = sem limite)
+// Datas em formato AAAA-MM-DD ('' = sem limite).
+// categoriaId: id da categoria na API (null = todas).
 export type FiltrosTransacao = {
   dataInicial: string;
   dataFinal: string;
-  categoria: string;
+  categoriaId: number | null;
 };
 
 export const FILTROS_VAZIOS: FiltrosTransacao = {
   dataInicial: '',
   dataFinal: '',
-  categoria: 'Todas',
+  categoriaId: null,
 };
 
-const CATEGORIAS = ['Todas', 'Alimentação', 'Moradia', 'Transporte', 'Lazer', 'Salário', 'Outros'];
+// Uma opção de categoria no modal ("Todas" tem id null).
+type Opcao = { id: number | null; nome: string };
 
 function aplicarMascaraData(texto: string) {
   const d = texto.replace(/\D/g, '').slice(0, 8);
@@ -45,16 +48,21 @@ type Props = {
 };
 
 export default function FiltrosModal({ visible, filtrosAtuais, onAplicar, onFechar }: Props) {
+  // categorias reais da API (sem a Renda)
+  const { categorias } = useTransacoes();
+
   const [dataInicial, setDataInicial] = useState('');
   const [dataFinal, setDataFinal] = useState('');
-  const [categoria, setCategoria] = useState('Todas');
+  const [categoriaId, setCategoriaId] = useState<number | null>(null);
+
+  const opcoes: Opcao[] = [{ id: null, nome: 'Todas' }, ...categorias];
 
   // Ao abrir, os campos mostram os filtros que estão valendo
   useEffect(() => {
     if (visible) {
       setDataInicial(filtrosAtuais.dataInicial ? isoParaBR(filtrosAtuais.dataInicial) : '');
       setDataFinal(filtrosAtuais.dataFinal ? isoParaBR(filtrosAtuais.dataFinal) : '');
-      setCategoria(filtrosAtuais.categoria);
+      setCategoriaId(filtrosAtuais.categoriaId);
     }
   }, [visible, filtrosAtuais]);
 
@@ -83,13 +91,13 @@ export default function FiltrosModal({ visible, filtrosAtuais, onAplicar, onFech
       return;
     }
 
-    onAplicar({ dataInicial: inicialISO, dataFinal: finalISO, categoria });
+    onAplicar({ dataInicial: inicialISO, dataFinal: finalISO, categoriaId });
   }
 
   function handleLimpar() {
     setDataInicial('');
     setDataFinal('');
-    setCategoria('Todas');
+    setCategoriaId(null);
     onAplicar(FILTROS_VAZIOS);
   }
 
@@ -142,16 +150,16 @@ export default function FiltrosModal({ visible, filtrosAtuais, onAplicar, onFech
 
             <Text style={styles.secao}>CATEGORIA</Text>
             <View style={styles.chips}>
-              {CATEGORIAS.map((c) => {
-                const selecionada = c === categoria;
+              {opcoes.map((c) => {
+                const selecionada = c.id === categoriaId;
                 return (
                   <TouchableOpacity
-                    key={c}
+                    key={c.id ?? 'todas'}
                     style={[styles.chip, selecionada && styles.chipSelecionado]}
-                    onPress={() => setCategoria(c)}
+                    onPress={() => setCategoriaId(c.id)}
                   >
                     <Text style={[styles.textoChip, selecionada && styles.textoChipSelecionado]}>
-                      {c}
+                      {c.nome}
                     </Text>
                   </TouchableOpacity>
                 );
