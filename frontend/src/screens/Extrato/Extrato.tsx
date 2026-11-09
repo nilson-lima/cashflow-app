@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   RefreshControl,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../navigation/AppNavigator';
 import type { Transacao } from '../../models/Transacao';
@@ -25,20 +26,53 @@ const ABAS: Aba[] = ['Tudo', 'Entradas', 'Saídas'];
 type Grupo = { data: string; itens: Transacao[] };
 
 export default function ExtratoScreen({ navigation }: Props) {
-  const { transacoes, carregando, erro, recarregar } = useTransacoes();
+  const { buscarTransacoes } = useTransacoes();
   const [aba, setAba] = useState<Aba>('Tudo');
   const [filtros, setFiltros] = useState<FiltrosTransacao>(FILTROS_VAZIOS);
   const [filtrosAbertos, setFiltrosAbertos] = useState(false);
 
-  const filtrosAtivos =
-    filtros.dataInicial !== '' || filtros.dataFinal !== '' || filtros.categoria !== 'Todas';
+  // Lista buscada na API (já com os filtros de período e categoria aplicados)
+  const [lista, setLista] = useState<Transacao[]>([]);
+  const [carregando, setCarregando] = useState(true);
+  const [erro, setErro] = useState<string | null>(null);
 
-  const filtradas = transacoes.filter((t) => {
+  // Número da busca mais recente: descarta respostas antigas (ex.: filtros trocados rápido).
+  const versaoRef = useRef(0);
+
+  const filtrosAtivos =
+    filtros.dataInicial !== '' || filtros.dataFinal !== '' || filtros.categoriaId !== null;
+
+  const carregar = useCallback(async () => {
+    const minhaVersao = ++versaoRef.current;
+    setCarregando(true);
+    setErro(null);
+    const resultado = await buscarTransacoes({
+      dataInicial: filtros.dataInicial,
+      dataFinal: filtros.dataFinal,
+      categoriaId: filtros.categoriaId,
+    });
+    if (minhaVersao !== versaoRef.current) return;
+    if (resultado.ok) {
+      setLista(resultado.dados);
+    } else {
+      setLista([]); // não deixa mostrar uma lista antiga com filtros novos
+      setErro(resultado.erro);
+    }
+    setCarregando(false);
+  }, [buscarTransacoes, filtros]);
+
+  // Busca ao abrir a tela, ao voltar para ela (ex.: depois de editar ou excluir)
+  // e sempre que os filtros mudam.
+  useFocusEffect(
+    useCallback(() => {
+      carregar();
+    }, [carregar])
+  );
+
+  // As abas Tudo / Entradas / Saídas filtram aqui mesmo, sem nova chamada à API
+  const filtradas = lista.filter((t) => {
     if (aba === 'Entradas' && t.tipo !== 'receita') return false;
     if (aba === 'Saídas' && t.tipo !== 'despesa') return false;
-    if (filtros.dataInicial && t.data < filtros.dataInicial) return false;
-    if (filtros.dataFinal && t.data > filtros.dataFinal) return false;
-    if (filtros.categoria !== 'Todas' && t.categoria !== filtros.categoria) return false;
     return true;
   });
 
@@ -64,11 +98,9 @@ export default function ExtratoScreen({ navigation }: Props) {
 
   function mensagemVazia() {
     if (carregando) return 'Carregando...';
-    if (erro && transacoes.length === 0) {
-      return `${erro} Puxe a tela para baixo para tentar de novo.`;
-    }
-    if (transacoes.length === 0) return 'Nenhuma transação ainda. Toque em "+" para adicionar.';
+    if (erro) return `${erro} Puxe a tela para baixo para tentar de novo.`;
     if (filtrosAtivos) return 'Nenhuma transação encontrada com esses filtros.';
+    if (lista.length === 0) return 'Nenhuma transação ainda. Toque em "+" para adicionar.';
     return 'Nenhuma transação nesta categoria.';
   }
 
@@ -76,7 +108,7 @@ export default function ExtratoScreen({ navigation }: Props) {
     <View style={styles.container}>
       <ScrollView
         contentContainerStyle={styles.scrollContent}
-        refreshControl={<RefreshControl refreshing={carregando} onRefresh={recarregar} />}
+        refreshControl={<RefreshControl refreshing={carregando} onRefresh={carregar} />}
       >
         <View style={styles.cabecalho}>
           <Text style={styles.titulo}>Extrato</Text>
