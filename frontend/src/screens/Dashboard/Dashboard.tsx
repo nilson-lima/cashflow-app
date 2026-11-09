@@ -1,39 +1,102 @@
-import React from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity } from 'react-native';
+import React, { useCallback, useRef, useState } from 'react';
+import {
+  View,
+  Text,
+  ScrollView,
+  StyleSheet,
+  TouchableOpacity,
+  RefreshControl,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../navigation/AppNavigator';
 import { colors } from '../../theme/colors';
 import BottomBar from '../../components/BottomBar';
 import { useTransacoes } from '../../contexts/TransacoesContext';
 import { useAuth } from '../../contexts/AuthContext';
-import { formatarMoeda, rotuloData } from '../../utils/formatters';
+import { api, ApiError } from '../../services/api';
+import { formatarMoeda, rotuloData, valorApiParaCentavos } from '../../utils/formatters';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Dashboard'>;
 
+// Resposta do GET /resumo (valores em texto, ex.: "1500.00").
+type ResumoApi = {
+  total_receitas: string;
+  total_despesas: string;
+  saldo: string;
+  despesas_por_categoria: { categoria: string; total: string }[];
+};
+
+// Totais já em centavos, prontos para formatarMoeda.
+type Totais = { receitas: number; despesas: number; saldo: number };
+
 export default function DashboardScreen({ navigation }: Props) {
-  const { transacoes } = useTransacoes();
+  const { transacoes, recarregar } = useTransacoes();
   const { usuario } = useAuth();
 
-  const receitas = transacoes
-    .filter((t) => t.tipo === 'receita')
-    .reduce((soma, t) => soma + t.valorCentavos, 0);
-  const despesas = transacoes
-    .filter((t) => t.tipo === 'despesa')
-    .reduce((soma, t) => soma + t.valorCentavos, 0);
-  const saldo = receitas - despesas;
+  const [totais, setTotais] = useState<Totais | null>(null);
+  const [carregandoResumo, setCarregandoResumo] = useState(false);
+  const [erroResumo, setErroResumo] = useState<string | null>(null);
+
+  // Número da busca mais recente: descarta respostas antigas.
+  const versaoRef = useRef(0);
+
+  const carregarResumo = useCallback(async () => {
+    const minhaVersao = ++versaoRef.current;
+    setCarregandoResumo(true);
+    setErroResumo(null);
+    try {
+      const r = await api.get<ResumoApi>('/resumo');
+      if (minhaVersao !== versaoRef.current) return;
+      setTotais({
+        receitas: valorApiParaCentavos(r.total_receitas),
+        despesas: valorApiParaCentavos(r.total_despesas),
+        saldo: valorApiParaCentavos(r.saldo),
+      });
+    } catch (e) {
+      if (minhaVersao !== versaoRef.current) return;
+      setTotais(null); // não deixa números antigos na tela
+      setErroResumo(e instanceof ApiError ? e.message : 'Ocorreu um erro inesperado.');
+    } finally {
+      if (minhaVersao === versaoRef.current) setCarregandoResumo(false);
+    }
+  }, []);
+
+  // Busca o resumo ao abrir a tela e sempre que voltar para ela
+  // (por exemplo, depois de lançar, editar ou excluir uma movimentação).
+  useFocusEffect(
+    useCallback(() => {
+      carregarResumo();
+    }, [carregarResumo])
+  );
+
+  // Puxar a tela para baixo atualiza o resumo e a lista de recentes.
+  function atualizar() {
+    carregarResumo();
+    recarregar();
+  }
 
   const recentes = transacoes.slice(0, 5);
 
   return (
     <View style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        refreshControl={<RefreshControl refreshing={carregandoResumo} onRefresh={atualizar} />}
+      >
         <Text style={styles.saudacao}>Olá, {usuario?.nome.split(' ')[0] ?? 'Usuário'}</Text>
         <Text style={styles.subtitulo}>Seu resumo financeiro</Text>
 
+        {erroResumo && (
+          <Text style={styles.erro}>
+            {erroResumo} Puxe a tela para baixo para tentar de novo.
+          </Text>
+        )}
+
         <View style={styles.cardSaldo}>
           <Text style={styles.labelSaldo}>Saldo total:</Text>
-          <Text style={styles.valorSaldo}>{formatarMoeda(saldo)}</Text>
+          <Text style={styles.valorSaldo}>{totais ? formatarMoeda(totais.saldo) : 'R$ --'}</Text>
         </View>
 
         <View style={styles.linhaResumo}>
@@ -45,7 +108,7 @@ export default function DashboardScreen({ navigation }: Props) {
           >
             <Text style={[styles.labelResumo, { color: colors.income }]}>Receitas</Text>
             <Text style={[styles.valorResumo, { color: colors.income }]}>
-              {formatarMoeda(receitas)}
+              {totais ? formatarMoeda(totais.receitas) : 'R$ --'}
             </Text>
           </View>
           <View
@@ -56,7 +119,7 @@ export default function DashboardScreen({ navigation }: Props) {
           >
             <Text style={[styles.labelResumo, { color: colors.expense }]}>Despesas</Text>
             <Text style={[styles.valorResumo, { color: colors.expense }]}>
-              {formatarMoeda(despesas)}
+              {totais ? formatarMoeda(totais.despesas) : 'R$ --'}
             </Text>
           </View>
         </View>
@@ -104,6 +167,7 @@ const styles = StyleSheet.create({
   scrollContent: { padding: 24, paddingTop: 48, paddingBottom: 24 },
   saudacao: { fontSize: 20, fontWeight: '700', color: colors.textPrimary },
   subtitulo: { fontSize: 12, color: colors.textSecondary, marginBottom: 16 },
+  erro: { fontSize: 12, color: colors.expense, marginBottom: 12 },
   cardSaldo: {
     backgroundColor: colors.balanceCard,
     borderRadius: 16,
