@@ -1,27 +1,53 @@
-import React, { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
+import React, { useCallback, useRef, useState } from 'react';
+import {
+  View,
+  Text,
+  ScrollView,
+  TouchableOpacity,
+  StyleSheet,
+  RefreshControl,
+} from 'react-native';
 import Svg, { Circle, G } from 'react-native-svg';
+import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../navigation/AppNavigator';
 import { colors } from '../../theme/colors';
 import BottomBar from '../../components/BottomBar';
-import { useTransacoes } from '../../contexts/TransacoesContext';
-import { formatarMoeda, dataHojeISO, inicioPeriodoISO } from '../../utils/formatters';
+import { api, ApiError } from '../../services/api';
+import { formatarMoeda, isoParaBR, valorApiParaCentavos } from '../../utils/formatters';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Graficos'>;
 
 type Periodo = 'Semana' | 'Mês' | 'Ano';
 const PERIODOS: Periodo[] = ['Semana', 'Mês', 'Ano'];
 
-type CategoriaGasto = { nome: string; valor: number; cor: string };
+// Nome do período como a API espera no parâmetro "periodo"
+const PARAMETRO_API: Record<Periodo, string> = {
+  Semana: 'semana',
+  'Mês': 'mes',
+  Ano: 'ano',
+};
+
+// Resposta do GET /graficos/categorias (valores em texto, ex.: "50.00").
+type GraficoApi = {
+  periodo: string | null;
+  data_inicial: string | null;
+  data_final: string | null;
+  total_despesas: string;
+  categorias: { categoria: string; total: string; percentual: string }[];
+};
+
+type CategoriaGasto = { nome: string; valor: number; percentual: number; cor: string };
 
 const CORES: Record<string, string> = {
   Alimentação: '#8B7FE8',
   Moradia: '#F29E7D',
   Transporte: '#4FCB9E',
   Lazer: '#F08CB0',
-  Outros: '#9B9B9B',
+  Saúde: '#E5B84B',
+  'Sem categoria': '#9B9B9B',
 };
+const COR_PADRAO = '#9B9B9B';
 
 const TAMANHO = 200;
 const ESPESSURA = 36;
@@ -29,41 +55,79 @@ const RAIO = (TAMANHO - ESPESSURA) / 2;
 const CIRCUNFERENCIA = 2 * Math.PI * RAIO;
 
 export default function GraficosScreen({ navigation }: Props) {
-  const { transacoes } = useTransacoes();
   const [periodo, setPeriodo] = useState<Periodo>('Semana');
+  const [dados, setDados] = useState<GraficoApi | null>(null);
+  const [carregando, setCarregando] = useState(true);
+  const [erro, setErro] = useState<string | null>(null);
 
-  const inicio = inicioPeriodoISO(periodo);
-  const hoje = dataHojeISO();
+  // Número da busca mais recente: descarta respostas antigas (ex.: período trocado rápido).
+  const versaoRef = useRef(0);
 
-  // Só despesas dentro do período
-  const despesas = transacoes.filter(
-    (t) => t.tipo === 'despesa' && t.data >= inicio && t.data <= hoje
+  const carregar = useCallback(async () => {
+    const minhaVersao = ++versaoRef.current;
+    setCarregando(true);
+    setErro(null);
+    try {
+      const r = await api.get<GraficoApi>('/graficos/categorias', {
+        params: { periodo: PARAMETRO_API[periodo] },
+      });
+      if (minhaVersao !== versaoRef.current) return;
+      setDados(r);
+    } catch (e) {
+      if (minhaVersao !== versaoRef.current) return;
+      setDados(null);
+      setErro(e instanceof ApiError ? e.message : 'Ocorreu um erro inesperado.');
+    } finally {
+      if (minhaVersao === versaoRef.current) setCarregando(false);
+    }
+  }, [periodo]);
+
+  // Busca ao abrir a tela, ao voltar para ela e quando o período muda.
+  useFocusEffect(
+    useCallback(() => {
+      carregar();
+    }, [carregar])
   );
 
-  // Soma por categoria
-  const somas: Record<string, number> = {};
-  despesas.forEach((t) => {
-    somas[t.categoria] = (somas[t.categoria] || 0) + t.valorCentavos;
-  });
+  function trocarPeriodo(novo: Periodo) {
+    if (novo === periodo) return;
+    setDados(null); // não mostra os números do período anterior
+    setPeriodo(novo);
+  }
 
-  const categorias: CategoriaGasto[] = Object.keys(somas)
-    .map((nome) => ({ nome, valor: somas[nome], cor: CORES[nome] || CORES.Outros }))
+  const total = dados ? valorApiParaCentavos(dados.total_despesas) : 0;
+
+  // Categorias da API convertidas para o formato da tela, maiores primeiro
+  const categorias: CategoriaGasto[] = (dados?.categorias ?? [])
+    .map((c) => ({
+      nome: c.categoria,
+      valor: valorApiParaCentavos(c.total),
+      percentual: Number(c.percentual),
+      cor: CORES[c.categoria] ?? COR_PADRAO,
+    }))
     .sort((a, b) => b.valor - a.valor);
 
-  const total = categorias.reduce((soma, c) => soma + c.valor, 0);
-
-  // Calcula onde cada fatia começa no círculo
+  // Calcula onde cada fatia começa no círculo, usando o percentual que a API já calculou
   let acumulado = 0;
   const fatias = categorias.map((c) => {
-    const tamanho = (c.valor / total) * CIRCUNFERENCIA;
+    const tamanho = (c.percentual / 100) * CIRCUNFERENCIA;
     const fatia = { ...c, tamanho, deslocamento: -acumulado };
     acumulado += tamanho;
     return fatia;
   });
 
+  function mensagemVazia() {
+    if (carregando) return 'Carregando...';
+    if (erro) return `${erro} Puxe a tela para baixo para tentar de novo.`;
+    return 'Nenhuma despesa neste período.';
+  }
+
   return (
     <View style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        refreshControl={<RefreshControl refreshing={carregando} onRefresh={carregar} />}
+      >
         <Text style={styles.titulo}>Gráficos</Text>
         <Text style={styles.subtitulo}>Análise dos seus gastos</Text>
 
@@ -74,7 +138,7 @@ export default function GraficosScreen({ navigation }: Props) {
               <TouchableOpacity
                 key={p}
                 style={[styles.opcao, selecionado && styles.opcaoSelecionada]}
-                onPress={() => setPeriodo(p)}
+                onPress={() => trocarPeriodo(p)}
               >
                 <Text style={[styles.textoOpcao, selecionado && styles.textoOpcaoSelecionado]}>
                   {p}
@@ -84,13 +148,19 @@ export default function GraficosScreen({ navigation }: Props) {
           })}
         </View>
 
+        {dados?.data_inicial && dados?.data_final && (
+          <Text style={styles.faixaPeriodo}>
+            Período: {isoParaBR(dados.data_inicial)} a {isoParaBR(dados.data_final)}
+          </Text>
+        )}
+
         <View style={styles.cardTotal}>
           <Text style={styles.labelTotal}>Total gasto no período</Text>
-          <Text style={styles.valorTotal}>{formatarMoeda(total)}</Text>
+          <Text style={styles.valorTotal}>{dados ? formatarMoeda(total) : 'R$ --'}</Text>
         </View>
 
         {categorias.length === 0 ? (
-          <Text style={styles.vazio}>Nenhuma despesa neste período.</Text>
+          <Text style={styles.vazio}>{mensagemVazia()}</Text>
         ) : (
           <>
             <View style={styles.areaGrafico}>
@@ -123,7 +193,9 @@ export default function GraficosScreen({ navigation }: Props) {
                 <View style={[styles.marcador, { backgroundColor: c.cor }]} />
                 <View style={styles.infoCategoria}>
                   <Text style={styles.nomeCategoria}>{c.nome}</Text>
-                  <Text style={styles.percentual}>{Math.round((c.valor / total) * 100)}%</Text>
+                  <Text style={styles.percentual}>
+                    {c.percentual.toFixed(1).replace('.', ',')}%
+                  </Text>
                 </View>
                 <Text style={styles.valorCategoria}>{formatarMoeda(c.valor)}</Text>
               </View>
@@ -158,6 +230,7 @@ const styles = StyleSheet.create({
   opcaoSelecionada: { backgroundColor: colors.primary },
   textoOpcao: { fontSize: 13, fontWeight: '600', color: colors.textPrimary },
   textoOpcaoSelecionado: { color: '#FFFFFF' },
+  faixaPeriodo: { fontSize: 11, color: colors.placeholder, marginBottom: 8 },
   cardTotal: {
     backgroundColor: colors.balanceCard,
     borderRadius: 16,
