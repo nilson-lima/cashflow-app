@@ -7,6 +7,12 @@ export function formatarMoeda(centavos: number) {
   return `${negativo ? '-' : ''}R$ ${inteiro},${resto}`;
 }
 
+// Valor que a API devolve em texto ("1500.00") -> centavos (150000).
+// Também funciona com valores negativos ("-50.00" -> -5000).
+export function valorApiParaCentavos(valor: string): number {
+  return Math.round(Number(valor) * 100);
+}
+
 function paraISO(d: Date) {
   const ano = d.getFullYear();
   const mes = String(d.getMonth() + 1).padStart(2, '0');
@@ -48,6 +54,7 @@ export function rotuloData(iso: string) {
 
 // Primeiro dia (AAAA-MM-DD) de cada período, contando até hoje
 // Semana = últimos 7 dias, Mês = mês atual, Ano = ano atual
+// (não é mais usada pelos gráficos, que agora calculam o período na API)
 export function inicioPeriodoISO(periodo: 'Semana' | 'Mês' | 'Ano') {
   const hoje = new Date();
   if (periodo === 'Semana') {

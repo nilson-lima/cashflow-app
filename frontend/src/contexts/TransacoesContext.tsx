@@ -9,6 +9,7 @@ import React, {
 } from 'react';
 import { api, ApiError } from '../services/api';
 import { useAuth } from './AuthContext';
+import { valorApiParaCentavos } from '../utils/formatters';
 import type { Transacao, TipoTransacao } from '../models/Transacao';
 
 // Categoria como a API devolve em GET /categorias.
@@ -33,8 +34,16 @@ export type DadosTransacao = {
   data: string;
 };
 
+// Filtros aceitos na busca do Extrato (datas em AAAA-MM-DD, vazio = sem limite).
+export type FiltrosBusca = {
+  dataInicial?: string;
+  dataFinal?: string;
+  categoriaId?: number | null;
+};
+
 // Resultado das ações: ok:true, ou ok:false com a mensagem para mostrar na tela.
 type Resultado = { ok: true } | { ok: false; erro: string };
+type ResultadoBusca = { ok: true; dados: Transacao[] } | { ok: false; erro: string };
 
 type TransacoesContextData = {
   transacoes: Transacao[];
@@ -42,6 +51,7 @@ type TransacoesContextData = {
   carregando: boolean;
   erro: string | null; // mensagem se a lista não pôde ser carregada
   recarregar: () => Promise<void>;
+  buscarTransacoes: (filtros: FiltrosBusca) => Promise<ResultadoBusca>;
   adicionarTransacao: (dados: DadosTransacao) => Promise<Resultado>;
   editarTransacao: (id: number, dados: DadosTransacao) => Promise<Resultado>;
   excluirTransacao: (id: number) => Promise<Resultado>;
@@ -51,11 +61,6 @@ const TransacoesContext = createContext<TransacoesContextData | undefined>(undef
 
 function mensagemDoErro(e: unknown): string {
   return e instanceof ApiError ? e.message : 'Ocorreu um erro inesperado.';
-}
-
-// "1500.00" (API) -> 150000 (centavos, usado nas telas)
-function valorParaCentavos(valor: string): number {
-  return Math.round(Number(valor) * 100);
 }
 
 // Monta o corpo do POST/PUT. Receita nunca leva categoria (a API recusa).
@@ -72,6 +77,24 @@ function corpoParaApi(dados: DadosTransacao) {
 // A categoria "Renda" existe na API, mas nunca pode ser usada pelo app.
 function ehRenda(c: Categoria) {
   return c.nome.trim().toLowerCase() === 'renda';
+}
+
+// Converte uma movimentação da API para o formato que as telas usam.
+function converter(m: MovimentacaoApi, nomes: Map<number, string>): Transacao {
+  return {
+    id: m.id,
+    tipo: m.tipo,
+    valorCentavos: valorApiParaCentavos(m.valor),
+    descricao: m.descricao,
+    categoriaId: m.categoria_id,
+    categoria:
+      m.tipo === 'receita'
+        ? 'Receita'
+        : m.categoria_id === null
+          ? 'Sem categoria'
+          : (nomes.get(m.categoria_id) ?? 'Sem categoria'),
+    data: m.data,
+  };
 }
 
 export function TransacoesProvider({ children }: { children: React.ReactNode }) {
@@ -133,32 +156,43 @@ export function TransacoesProvider({ children }: { children: React.ReactNode }) 
     [todasCategorias]
   );
 
-  // Converte o formato da API para o formato que as telas usam.
-  const transacoes = useMemo<Transacao[]>(() => {
-    const nomes = new Map<number, string>(
-      todasCategorias.map((c) => [c.id, c.nome] as [number, string])
-    );
-    return movimentacoes
-      .map((m) => ({
-        id: m.id,
-        tipo: m.tipo,
-        valorCentavos: valorParaCentavos(m.valor),
-        descricao: m.descricao,
-        categoriaId: m.categoria_id,
-        categoria:
-          m.tipo === 'receita'
-            ? 'Receita'
-            : m.categoria_id === null
-              ? 'Sem categoria'
-              : (nomes.get(m.categoria_id) ?? 'Sem categoria'),
-        data: m.data,
-      }))
-      .sort((a, b) => {
-        // Mais recentes primeiro
-        if (a.data === b.data) return b.id - a.id;
-        return a.data < b.data ? 1 : -1;
-      });
-  }, [movimentacoes, todasCategorias]);
+  // id da categoria -> nome (usado para mostrar o nome nas telas)
+  const nomes = useMemo(
+    () => new Map<number, string>(todasCategorias.map((c) => [c.id, c.nome] as [number, string])),
+    [todasCategorias]
+  );
+
+  // Lista completa no formato das telas, mais recentes primeiro.
+  const transacoes = useMemo<Transacao[]>(
+    () =>
+      movimentacoes
+        .map((m) => converter(m, nomes))
+        .sort((a, b) => {
+          if (a.data === b.data) return b.id - a.id;
+          return a.data < b.data ? 1 : -1;
+        }),
+    [movimentacoes, nomes]
+  );
+
+  // Busca na API com filtros de período e categoria (usada pelo Extrato).
+  // A API já devolve a lista ordenada (data e id, do mais recente para o mais antigo).
+  const buscarTransacoes = useCallback(
+    async (filtros: FiltrosBusca): Promise<ResultadoBusca> => {
+      try {
+        const lista = await api.get<MovimentacaoApi[]>('/movimentacoes', {
+          params: {
+            data_inicial: filtros.dataInicial,
+            data_final: filtros.dataFinal,
+            categoria_id: filtros.categoriaId,
+          },
+        });
+        return { ok: true, dados: lista.map((m) => converter(m, nomes)) };
+      } catch (e) {
+        return { ok: false, erro: mensagemDoErro(e) };
+      }
+    },
+    [nomes]
+  );
 
   async function adicionarTransacao(dados: DadosTransacao): Promise<Resultado> {
     try {
@@ -198,6 +232,7 @@ export function TransacoesProvider({ children }: { children: React.ReactNode }) 
         carregando,
         erro,
         recarregar,
+        buscarTransacoes,
         adicionarTransacao,
         editarTransacao,
         excluirTransacao,
